@@ -1,112 +1,176 @@
-using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
+using System.Collections;
 
 public class GameManager : MonoBehaviour
 {
-    public static GameManager Instance;
+    public static GameManager Instance { get; private set; }
 
-    [Header("Meta y Distancia")]
-    public float distanceToGoal = 100f; 
-    public float travelSpeed = 5f;     
+    [Header("Dificultad Progresiva")]
+    public int currentLevel = 1;
+    public float baseTargetDistance = 100f;       // Distancia para el Nivel 1
+    public float distanceIncrementPerLevel = 50f; // Metros adicionales por nivel extra
 
-    [Header("Timers de Retroalimentaci�n")]
-    public float delayBeforeMenu = 3f; 
+    private float targetDistance;
+    private float currentDistance;
 
-    [Header("UI del Juego")]
-    public TextMeshProUGUI scoreText;
-    public TextMeshProUGUI highScoreText;
-    public TextMeshProUGUI distanceText;
-    public GameObject winPanel;
-    public GameObject losePanel;
+    [Header("UI del Jugador")]
+    public TMP_Text distanceText;                 // UI para mostrar metros restantes
+    public TMP_Text livesText;
+    public GameObject gameOverPanel;
 
-    private bool isGameOver = false;
+    [Header("Ajustes del Jefe")]
+    public GameObject bossPrefab;
+    public Transform bossSpawnPoint;
+    public Slider bossHealthSlider;
+    private bool bossSpawned = false;
+
+    [Header("Configuración de Escenas")]
+    public string mainMenuSceneName = "MainMenu";
 
     private void Awake()
     {
         if (Instance == null) Instance = this;
+        else Destroy(gameObject);
     }
 
     private void Start()
     {
-        UpdateHighScoreUI();
+        Time.timeScale = 1f;
+
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(false);
+        }
+
+        // Configura la distancia del nivel actual y actualiza la UI
+        CalculateAndResetDistance();
+
+        // Notifica al spawner para ajustar su velocidad en el arranque
+        EnemySpawner spawner = FindFirstObjectByType<EnemySpawner>();
+        if (spawner != null)
+        {
+            spawner.IncreaseDifficulty(currentLevel);
+        }
     }
 
     private void Update()
     {
-        if (isGameOver) return;
-
-        if (distanceToGoal > 0)
+        if (!bossSpawned)
         {
-            distanceToGoal -= travelSpeed * Time.deltaTime;
-            if (distanceText != null)
-                distanceText.text = "Left: " + Mathf.Max(0, Mathf.RoundToInt(distanceToGoal)) + "m";
+            currentDistance -= Time.deltaTime * 5f;
+            currentDistance = Mathf.Max(0f, currentDistance);
 
-            if (distanceToGoal <= 0)
+            UpdateDistanceUI();
+
+            if (currentDistance <= 0f)
             {
-                TriggerWin();
+                SpawnBoss();
             }
         }
     }
 
-    public void TriggerWin()
+    private void CalculateAndResetDistance()
     {
-        if (isGameOver) return;
-        isGameOver = true;
-
-        if (winPanel != null) winPanel.SetActive(true);
-        if (AudioManager.Instance != null) AudioManager.Instance.PlayWin();
-
-        CheckHighScore();
-        StartCoroutine(ReturnToMenuTimer());
+        targetDistance = baseTargetDistance + ((currentLevel - 1) * distanceIncrementPerLevel);
+        currentDistance = targetDistance;
+        UpdateDistanceUI();
     }
 
-    public void TriggerGameOver()
+    private void UpdateDistanceUI()
     {
-        if (isGameOver) return;
-        isGameOver = true;
-
-        if (losePanel != null) losePanel.SetActive(true);
-        if (AudioManager.Instance != null) AudioManager.Instance.PlayLose();
-
-        CheckHighScore();
-        StartCoroutine(ReturnToMenuTimer());
-    }
-
-    private IEnumerator ReturnToMenuTimer()
-    {
-        yield return new WaitForSeconds(delayBeforeMenu);
-        SceneManager.LoadScene("MainMenu");
-    }
-
-    private void CheckHighScore()
-    {
-        int currentScore = ScoreManager.Instance != null ? ScoreManager.Instance.currentScore : 0;
-        int highScore = PlayerPrefs.GetInt("HighScore", 0);
-
-        if (currentScore > highScore)
+        if (distanceText != null)
         {
-            PlayerPrefs.SetInt("HighScore", currentScore);
-            PlayerPrefs.Save();
+            distanceText.text = "Distance: " + Mathf.CeilToInt(currentDistance) + "m";
         }
     }
 
-    private void UpdateHighScoreUI()
+    private void SpawnBoss()
     {
-        if (highScoreText != null)
-            highScoreText.text = "Max: " + PlayerPrefs.GetInt("HighScore", 0);
+        bossSpawned = true;
+
+        if (distanceText != null)
+        {
+            distanceText.text = "BOSS WARNING!";
+        }
+
+        EnemySpawner spawner = FindFirstObjectByType<EnemySpawner>();
+        if (spawner != null) spawner.enabled = false;
+
+        if (bossPrefab != null && bossSpawnPoint != null)
+        {
+            GameObject bossInstance = Instantiate(bossPrefab, bossSpawnPoint.position, Quaternion.identity);
+
+            BossScript bossScript = bossInstance.GetComponent<BossScript>();
+            if (bossScript != null)
+            {
+                bossScript.maxHealth += (currentLevel - 1) * 15;
+            }
+
+            if (bossHealthSlider != null)
+            {
+                bossHealthSlider.gameObject.SetActive(true);
+                if (bossScript != null)
+                {
+                    bossScript.SetupHealthBar(bossHealthSlider);
+                }
+            }
+        }
     }
 
-    [Header("UI de Vidas")]
-    public TMPro.TextMeshProUGUI livesText; 
+    public void OnBossDefeated()
+    {
+        currentLevel++;
+        bossSpawned = false;
+
+        // Recalcular la nueva distancia para el nivel recién desbloqueado
+        CalculateAndResetDistance();
+
+        EnemySpawner spawner = FindFirstObjectByType<EnemySpawner>();
+        if (spawner != null)
+        {
+            spawner.enabled = true;
+            spawner.IncreaseDifficulty(currentLevel);
+        }
+    }
 
     public void UpdateLivesUI(int currentLives)
     {
         if (livesText != null)
         {
-            livesText.text = "Vidas: " + Mathf.Max(0, currentLives);
+            livesText.text = "Lives: " + currentLives;
         }
     }
 
+    public void TriggerGameOver()
+    {
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(true);
+        }
+
+        StartCoroutine(AutoReturnToMainMenuCoroutine(2.5f));
+    }
+
+    private IEnumerator AutoReturnToMainMenuCoroutine(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        ReturnToMainMenu();
+    }
+
+    public void ReturnToMainMenu()
+    {
+        Time.timeScale = 1f;
+
+        if (!string.IsNullOrEmpty(mainMenuSceneName))
+        {
+            SceneManager.LoadScene(mainMenuSceneName);
+        }
+        else
+        {
+            SceneManager.LoadScene(0);
+        }
+    }
 }
