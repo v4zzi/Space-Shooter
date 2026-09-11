@@ -27,7 +27,7 @@ public class GameManager : MonoBehaviour
     public Slider bossHealthSlider;
     private bool bossSpawned = false;
 
-    [Header("Configuración de Escenas")]
+    [Header("ConfiguraciÃ³n de Escenas")]
     public string mainMenuSceneName = "MainMenu";
 
     private void Awake()
@@ -125,7 +125,7 @@ public class GameManager : MonoBehaviour
         currentLevel++;
         bossSpawned = false;
 
-        // Recalcular la nueva distancia para el nivel recién desbloqueado
+        // Recalcular la nueva distancia para el nivel reciÃ©n desbloqueado
         CalculateAndResetDistance();
 
         EnemySpawner spawner = FindFirstObjectByType<EnemySpawner>();
