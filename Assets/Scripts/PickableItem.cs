@@ -2,21 +2,17 @@ using UnityEngine;
 
 public class PickableItem : MonoBehaviour
 {
-    public enum ItemType { ExtraPoints, ExtraLife }
+    public enum ItemType { ExtraPoints, ExtraLife, TripleShot, RapidFire }
 
-    [Header("Tipo y Valor")]
-    public ItemType type = ItemType.ExtraPoints;
-    public int value = 250;       // Cantidad de puntos o vidas a sumar
+    [Header("Configuración del Ítem")]
+    public ItemType type;
+    public int value = 1;
+    public float fallSpeed = 2f;
 
-    [Header("Movimiento")]
-    public float fallSpeed = 2f;  // Velocidad a la que cae hacia el jugador
-
-    void Update()
+    private void Update()
     {
-        // Avanza hacia abajo en el eje Z
         transform.Translate(Vector3.back * fallSpeed * Time.deltaTime, Space.World);
 
-        // Se autodestruye si pasa al jugador y sale de pantalla
         if (transform.position.z < -10f)
         {
             Destroy(gameObject);
@@ -25,26 +21,31 @@ public class PickableItem : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        
         if (other.CompareTag("Player"))
         {
-            if (type == ItemType.ExtraPoints)
+            PlayerScript player = other.GetComponent<PlayerScript>();
+
+            if (player != null)
             {
-                if (ScoreManager.Instance != null)
+                switch (type)
                 {
-                    ScoreManager.Instance.AddPoints(value);
+                    case ItemType.RapidFire:
+                        player.ActivateRapidFire();
+                        break;
+                    case ItemType.TripleShot:
+                        player.ActivateTripleShot();
+                        break;
+                    case ItemType.ExtraLife:
+                        player.AddLife(value);
+                        break;
+                    case ItemType.ExtraPoints:
+                        ScoreManager.Instance?.AddPoints(value * 100);
+                        break;
                 }
-            }
-            else if (type == ItemType.ExtraLife)
-            {
-                PlayerScript player = other.GetComponent<PlayerScript>();
-                if (player != null)
-                {
-                    player.AddLife(value);
-                }
+
+                AudioManager.Instance?.PlayItem();
             }
 
-            
             Destroy(gameObject);
         }
     }

@@ -2,51 +2,37 @@ using UnityEngine;
 
 public class EnemyScript : MonoBehaviour
 {
-    [Header("Velocidad y Patrón")]
-    public float speedForward = 4f;
-    public float frequency = 2.5f;
-    public float magnitude = 3f;
+    [Header("Estadísticas Base del Enemigo")]
+    public int maxHealth = 1;
+    protected int currentHealth;
+    public int pointsValue = 100;
+    public float speed = 4f;
 
-    [Header("Salud y Puntos")]
-    public int health = 1;
-    public int scoreValue = 100;
+    [Header("Sistema de Drops")]
+    [Range(0f, 1f)] public float dropChance = 0.3f;
+    public GameObject[] itemPrefabs;
 
-    [Header("Drop de Ítems (Power-ups)")]
-    public GameObject dropItemPrefab; 
-    [Range(0f, 1f)]
-    public float dropChance = 0.3f;   
-
-    [Header("Límites de Reaparición")]
-    public float zLimitBottom = -10f;
-    public float zSpawnTop = 15f;
-    public float xSpawnMin = -7f;
-    public float xSpawnMax = 7f;
-
-    private Vector3 startPosition;
-    private float timer;
-    private int currentHealth;
-
-    void Start()
+    protected virtual void Start()
     {
-        ResetEnemyPosition();
+        currentHealth = maxHealth;
     }
 
-    void Update()
+    protected virtual void Update()
     {
-        timer += Time.deltaTime;
+        Move();
 
-        float newZ = transform.position.z - (speedForward * Time.deltaTime);
-        float newX = startPosition.x + Mathf.Sin(timer * frequency) * magnitude;
-
-        transform.position = new Vector3(newX, transform.position.y, newZ);
-
-        if (transform.position.z <= zLimitBottom)
+        if (transform.position.z < -12f)
         {
-            ResetEnemyPosition();
+            Destroy(gameObject);
         }
     }
 
-    public void TakeDamage(int damageAmount)
+    protected virtual void Move()
+    {
+        transform.Translate(Vector3.back * speed * Time.deltaTime);
+    }
+
+    public virtual void TakeDamage(int damageAmount)
     {
         currentHealth -= damageAmount;
 
@@ -56,41 +42,46 @@ public class EnemyScript : MonoBehaviour
         }
     }
 
-    private void Die()
+    protected virtual void Die()
     {
-        
         if (ScoreManager.Instance != null)
         {
-            ScoreManager.Instance.AddPoints(scoreValue);
+            ScoreManager.Instance.AddPoints(pointsValue);
         }
 
-        
-        TryDropItem();
-
-        
-        ResetEnemyPosition();
+        TrySpawnDrop();
+        Destroy(gameObject);
     }
 
-    private void TryDropItem()
+    protected void TrySpawnDrop()
     {
-        if (dropItemPrefab != null)
+        if (itemPrefabs != null && itemPrefabs.Length > 0)
         {
-            float randomValue = Random.value; 
+            float randomValue = Random.value;
             if (randomValue <= dropChance)
             {
-                Instantiate(dropItemPrefab, transform.position, Quaternion.identity);
+                int randomIndex = Random.Range(0, itemPrefabs.Length);
+                Instantiate(itemPrefabs[randomIndex], transform.position, Quaternion.identity);
             }
         }
     }
 
-    public void ResetEnemyPosition()
+    protected virtual void OnTriggerEnter(Collider other)
     {
-        currentHealth = health; 
-        float randomX = Random.Range(xSpawnMin, xSpawnMax);
+        if (other.CompareTag("Bullet"))
+        {
+            TakeDamage(1);
+            Destroy(other.gameObject);
+        }
+        else if (other.CompareTag("Player"))
+        {
+            PlayerScript player = other.GetComponent<PlayerScript>();
+            if (player != null)
+            {
+                player.TakeDamage(1);
+            }
 
-        startPosition = new Vector3(randomX, transform.position.y, zSpawnTop);
-        transform.position = startPosition;
-
-        timer = 0f;
+            Destroy(gameObject);
+        }
     }
 }

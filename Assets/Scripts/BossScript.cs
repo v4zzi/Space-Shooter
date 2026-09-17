@@ -1,54 +1,99 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class BossScript : MonoBehaviour
 {
-    [Header("Velocidad y Patrón")]
-    public float speedForward = 4f;
-    public float frequency = 2.5f;
-    public float magnitude = 3f;
-
-    [Header("Salud y Puntos")]
-    public int health = 1;
-    public int scoreValue = 100;
-
-    [Header("Drop de Ítems (Power-ups)")]
-    public GameObject dropItemPrefab; 
-    [Range(0f, 1f)]
-    public float dropChance = 0.3f;   
-
-    [Header("Límites de Reaparición")]
-    public float zLimitBottom = -10f;
-    public float zSpawnTop = 15f;
-    public float xSpawnMin = -7f;
-    public float xSpawnMax = 7f;
-
-    private Vector3 startPosition;
-    private float timer;
+    [Header("Salud del Jefe")]
+    public int maxHealth = 100;
     private int currentHealth;
 
-    void Start()
+    [Header("Barra de Vida (UI)")]
+    private Slider healthSlider;
+
+    [Header("Movimiento del Jefe")]
+    public float speed = 4f;
+    public float movementRange = 6f;
+    private Vector3 startPosition;
+
+    [Header("Sistema de Disparo del Jefe")]
+    public GameObject enemyBulletPrefab; // Prefab de la bala del enemigo
+    public Transform firePoint;          // Lugar de donde salen los disparos
+    public float fireRate = 1.5f;        // Cadencia de disparo (segundos)
+    private float fireTimer;
+
+    [Header("Puntos de Recompensa")]
+    public int scoreValue = 500;
+
+    [Header("Sistema de Drops / Recompensas")]
+    public GameObject[] possibleDrops;
+    [Range(0f, 1f)] public float dropChance = 1.0f;
+
+    private void Start()
     {
-        ResetEnemyPosition();
-    }
+        currentHealth = maxHealth;
+        startPosition = transform.position;
 
-    void Update()
-    {
-        timer += Time.deltaTime;
-
-        float newZ = transform.position.z - (speedForward * Time.deltaTime);
-        float newX = startPosition.x + Mathf.Sin(timer * frequency) * magnitude;
-
-        transform.position = new Vector3(newX, transform.position.y, newZ);
-
-        if (transform.position.z <= zLimitBottom)
+        if (healthSlider != null)
         {
-            ResetEnemyPosition();
+            healthSlider.maxValue = maxHealth;
+            healthSlider.value = currentHealth;
         }
     }
 
-    public void TakeDamage(int damageAmount)
+    private void Update()
     {
-        currentHealth -= damageAmount;
+        MoveBoss();
+        HandleShooting();
+    }
+
+    private void MoveBoss()
+    {
+        // Movimiento senoidal liso en X (asegura que siempre se mueva)
+        float newX = startPosition.x + Mathf.Sin(Time.time * speed) * movementRange;
+        transform.position = new Vector3(newX, transform.position.y, transform.position.z);
+    }
+
+    private void HandleShooting()
+    {
+        fireTimer += Time.deltaTime;
+
+        if (fireTimer >= fireRate)
+        {
+            Shoot();
+            fireTimer = 0f;
+        }
+    }
+
+    private void Shoot()
+    {
+        if (enemyBulletPrefab != null)
+        {
+            // Usar el firePoint si está asignado; de lo contrario, disparar desde la posición del jefe
+            Vector3 spawnPos = firePoint != null ? firePoint.position : transform.position;
+
+            // Instanciar el proyectil con rotación apuntando hacia abajo (180° en Y)
+            Instantiate(enemyBulletPrefab, spawnPos, Quaternion.Euler(0f, 180f, 0f));
+        }
+    }
+
+    public void SetupHealthBar(Slider slider)
+    {
+        healthSlider = slider;
+        if (healthSlider != null)
+        {
+            healthSlider.maxValue = maxHealth;
+            healthSlider.value = currentHealth;
+        }
+    }
+
+    public void TakeDamage(int damage)
+    {
+        currentHealth -= damage;
+
+        if (healthSlider != null)
+        {
+            healthSlider.value = currentHealth;
+        }
 
         if (currentHealth <= 0)
         {
@@ -58,39 +103,44 @@ public class BossScript : MonoBehaviour
 
     private void Die()
     {
-        
-        if (ScoreManager.Instance != null)
+        ScoreManager.Instance?.AddPoints(scoreValue);
+
+        if (healthSlider != null)
         {
-            ScoreManager.Instance.AddPoints(scoreValue);
+            healthSlider.gameObject.SetActive(false);
         }
 
-        
-        TryDropItem();
+        DropItem();
 
-        
-        ResetEnemyPosition();
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnBossDefeated();
+        }
+
+        AudioManager.Instance?.PlayWin();
+        Destroy(gameObject);
     }
 
-    private void TryDropItem()
+    private void DropItem()
     {
-        if (dropItemPrefab != null)
+        if (possibleDrops != null && possibleDrops.Length > 0 && Random.value <= dropChance)
         {
-            float randomValue = Random.value; 
-            if (randomValue <= dropChance)
+            int randomIndex = Random.Range(0, possibleDrops.Length);
+            GameObject selectedDrop = possibleDrops[randomIndex];
+
+            if (selectedDrop != null)
             {
-                Instantiate(dropItemPrefab, transform.position, Quaternion.identity);
+                Instantiate(selectedDrop, transform.position, Quaternion.identity);
             }
         }
     }
 
-    public void ResetEnemyPosition()
+    private void OnTriggerEnter(Collider other)
     {
-        currentHealth = health;
-        float randomX = Random.Range(xSpawnMin, xSpawnMax);
-
-        startPosition = new Vector3(randomX, transform.position.y, zSpawnTop);
-        transform.position = startPosition;
-
-        timer = 0f;
+        if (other.CompareTag("Bullet"))
+        {
+            TakeDamage(10);
+            Destroy(other.gameObject);
+        }
     }
 }
