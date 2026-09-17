@@ -47,13 +47,13 @@ public class AudioManager : MonoBehaviour
         PlayBGM();
     }
 
-    // Se ejecuta automáticamente CADA VEZ que se carga o reinicia una escena
+    // Se ejecuta automï¿½ticamente CADA VEZ que se carga o reinicia una escena
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // Re-asegurar que el AudioListener global esté habilitado
+        // Re-asegurar que el AudioListener global estï¿½ habilitado
         AudioListener.volume = 1f;
 
-        // Asegurar que la música de fondo siga o vuelva a sonar si se detuvo
+        // Asegurar que la mï¿½sica de fondo siga o vuelva a sonar si se detuvo
         if (bgmSource != null && bgmClip != null)
         {
             if (!bgmSource.isPlaying)
